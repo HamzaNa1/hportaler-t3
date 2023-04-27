@@ -1,9 +1,21 @@
 class ZonesGenerator {
-  static loaded: boolean = false;
-  static zones: ZoneInfo[];
-  static zoneNames: string[];
+  loaded: boolean;
+  zones: ZoneInfo[];
+  zoneNames: string[];
 
-  static FindZone(zoneName: string): string[] {
+  constructor() {
+    this.loaded = false;
+    this.zones = [];
+    this.zoneNames = [];
+
+    console.log("A");
+  }
+
+  public FindZone(zoneName: string): string[] {
+    if (!this.loaded) {
+      return [];
+    }
+
     let zones = [];
     for (let zone of this.zones) {
       let index = zone.name.toLowerCase().indexOf(zoneName.toLowerCase());
@@ -18,7 +30,7 @@ class ZonesGenerator {
       .slice(0, 10);
   }
 
-  static compare(zoneName1: any, zoneName2: any) {
+  private compare(zoneName1: any, zoneName2: any) {
     if (zoneName1.index > zoneName2.index) {
       return 1;
     } else if (zoneName1.index < zoneName2.index) {
@@ -28,7 +40,11 @@ class ZonesGenerator {
     return 0;
   }
 
-  static GetZone(zoneName: string): ZoneInfo | null {
+  public GetZone(zoneName: string): ZoneInfo | null {
+    if (!this.loaded) {
+      return null;
+    }
+
     let zone = this.zones.find((x) => x.name == zoneName);
 
     if (zone) {
@@ -38,7 +54,7 @@ class ZonesGenerator {
     return null;
   }
 
-  static async SetupZones(): Promise<void> {
+  public async SetupZones(): Promise<void> {
     this.zones = [];
     // this.zones = [
     //   {
@@ -60,15 +76,13 @@ class ZonesGenerator {
     //     isDeep: false,
     //   },
     // ];
-    this.zones = await this.fetchZonesJson();
-
-    this.zones = ZonesGenerator.zones.filter((x) => x.color != " ");
+    this.zones = (await this.fetchZonesJson()).filter((x) => x.color != " ");
     this.zoneNames = this.zones.map((x) => x.name);
 
     this.loaded = true;
   }
 
-  static async fetchZonesJson(): Promise<ZoneInfo[]> {
+  private async fetchZonesJson(): Promise<ZoneInfo[]> {
     const url =
       "https://raw.githubusercontent.com/HamzaNa1/data-dump/main/zones.json";
 
@@ -86,4 +100,7 @@ export interface ZoneInfo {
   isDeep: boolean;
 }
 
-export default ZonesGenerator;
+const zoneGenerator = new ZonesGenerator();
+zoneGenerator.SetupZones();
+
+export default zoneGenerator;

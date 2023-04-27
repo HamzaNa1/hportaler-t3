@@ -1,9 +1,9 @@
 import { ConnectionType, World } from "./world";
 import type { Ball, Connection } from "./world";
 import type { ZoneInfo } from "./zones/zones";
-import ZonesGenerator from "./zones/zones";
+import zonesGenerator from "./zones/zones";
 
-export default class MainLoop {
+export default class Loop {
   world: World;
   selectedBall: Ball | null;
 
@@ -37,9 +37,9 @@ export default class MainLoop {
     this.scale = newScale;
   }
 
-  public addConnection(info: AddConnectionInfo): boolean {
+  public addConnection(info: AddConnectionInfo): Connection | undefined {
     if (info.from == "" || info.to == "") {
-      return false;
+      return undefined;
     }
 
     if (info.type == "royal") {
@@ -48,21 +48,20 @@ export default class MainLoop {
     }
 
     if (info.h == 0 && info.m == 0) {
-      return false;
+      return undefined;
     }
 
-    let from = ZonesGenerator.GetZone(info.from);
-    let to = ZonesGenerator.GetZone(info.to);
+    let from = zonesGenerator.GetZone(info.from);
+    let to = zonesGenerator.GetZone(info.to);
 
     if (from == null || to == null) {
-      return false;
+      return undefined;
     }
+
     const date = new Date();
     let endTime = (info.h * 60 + info.m) * 60000 + date.getTime();
 
-    this.world.AddConnection(from, to, info.type, endTime);
-
-    return true;
+    return this.world.AddConnection(from, to, info.type, endTime);
   }
 
   public deleteSelected() {

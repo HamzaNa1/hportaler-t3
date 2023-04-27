@@ -10,12 +10,11 @@ import {
   useRef,
   useState,
 } from "react";
-import MainLoop, { AddConnectionInfo } from "~/utils/loop";
-import { ConnectionType } from "~/utils/world";
-import ZonesGenerator from "~/utils/zones/zones";
-
-const loop = new MainLoop();
-ZonesGenerator.SetupZones();
+import mainLoop from "~/utils/MainLoop";
+import { api } from "~/utils/api";
+import { AddConnectionInfo } from "~/utils/loop";
+import { ConnectionInfo, ConnectionType } from "~/utils/world";
+import zonesGenerator from "~/utils/zones/zones";
 
 const buttonStyle =
   "w-full flex-col items-center outline outline-1 rounded-sm border-black";
@@ -46,6 +45,27 @@ const Home: NextPage = () => {
       break;
   }
 
+  //   const { data } = api.connections.getAll.useQuery();
+  //   const { mutate } = api.connections.create.useMutation();
+
+  //   if (data) {
+  //     const infos = [];
+
+  //     for (let connection of data) {
+  //       const info: ConnectionInfo = {
+  //         id: connection.id,
+  //         start: connection.from,
+  //         end: connection.to,
+  //         type: connection.type as ConnectionType,
+  //         endTime: connection.endAt.getTime(),
+  //       };
+
+  //       infos.push(info);
+  //     }
+
+  //     mainLoop.world.Reload(infos);
+  //   }
+
   const AddConnection = () => {
     let connectionInfo: AddConnectionInfo = {
       from: from,
@@ -55,7 +75,8 @@ const Home: NextPage = () => {
       m: minute,
     };
 
-    if (!loop.addConnection(connectionInfo)) {
+    let connection = mainLoop.addConnection(connectionInfo);
+    if (!connection) {
       return;
     }
 
@@ -63,7 +84,7 @@ const Home: NextPage = () => {
     updateHour(0);
     updateMinute(0);
 
-    loop.randomizePositions();
+    mainLoop.randomizePositions();
   };
 
   return (
@@ -74,7 +95,7 @@ const Home: NextPage = () => {
         <link rel="icon" href="/favicon.ico" />
       </Head>
       <main className="flex h-screen bg-slate-700 text-white">
-        <div className="flex h-full w-[220px] flex-col gap-5 bg-slate-800 p-4">
+        <div className="flex h-full w-[220px] flex-col gap-5 bg-slate-800 p-4 shadow-black drop-shadow-xl">
           <AutoCompleteInput
             placeholder="From"
             value={from}
@@ -85,7 +106,7 @@ const Home: NextPage = () => {
             <button
               className={
                 buttonStyle +
-                " bg-green-700 outline outline-1 outline-amber-100 active:bg-green-800"
+                " bg-green-700 shadow-black outline outline-1 outline-amber-100 active:bg-green-800"
               }
               onClick={() => updateType("green")}
             >
@@ -161,13 +182,13 @@ const Home: NextPage = () => {
           </button>
           <button
             className="rounded-lg border border-amber-100 bg-amber-600 hover:bg-amber-500 active:bg-amber-700"
-            onClick={() => loop.deleteSelected()}
+            onClick={() => mainLoop.deleteSelected()}
           >
             Delete
           </button>
           <button
             className="rounded-lg border border-amber-100 bg-amber-600 hover:bg-amber-500 active:bg-amber-700"
-            onClick={() => loop.randomizePositions()}
+            onClick={() => mainLoop.randomizePositions()}
           >
             Randomize
           </button>
@@ -183,6 +204,30 @@ const Home: NextPage = () => {
 export default Home;
 
 const Canvas: React.FC = () => {
+  const { data: connections, isLoading } = api.connections.getAll.useQuery();
+
+  useEffect(() => {
+    if (!connections) {
+      return;
+    }
+
+    const infos = [];
+
+    for (let connection of connections) {
+      const info: ConnectionInfo = {
+        id: connection.id,
+        start: connection.from,
+        end: connection.to,
+        type: connection.type as ConnectionType,
+        endTime: connection.endAt.getTime(),
+      };
+
+      infos.push(info);
+    }
+
+    mainLoop.world.Reload(infos);
+  }, [connections?.length]);
+
   const onResize = () => {
     if (!canvas.current) {
       return;
@@ -196,35 +241,39 @@ const Canvas: React.FC = () => {
     canvas.current.style.width = width + "px";
     canvas.current.style.height = height + "px";
 
-    loop.onResize(width, height);
+    mainLoop.onResize(width, height);
   };
 
   const onMouseDown = (e: MouseEvent) => {
-    loop.onMouseDown(e.button);
-    console.log(e.clientX);
+    mainLoop.onMouseDown(e.button);
   };
 
   const onMouseUp = (e: MouseEvent) => {
-    loop.onMouseUp(e.button);
+    mainLoop.onMouseUp(e.button);
   };
 
   const onMouseMove = (e: MouseEvent) => {
-    loop.onMouseMove(e.clientX, e.clientY);
+    mainLoop.onMouseMove(e.clientX, e.clientY);
   };
 
   let canvas = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    window.addEventListener("resize", () => onResize());
+    window.addEventListener("resize", onResize);
     onResize();
-  });
+    mainLoop.update();
+
+    return () => {
+      window.removeEventListener("resize", onResize);
+    };
+  }, []);
 
   const tick = () => {
     if (!canvas.current) {
       return;
     }
 
-    loop.gameLoop(canvas.current.getContext("2d")!);
+    mainLoop.gameLoop(canvas.current.getContext("2d")!);
     requestAnimationFrame(tick);
   };
 
@@ -260,7 +309,7 @@ const AutoCompleteInput: React.FC<{
     setValue(zone);
   };
 
-  let zones = ZonesGenerator.FindZone(value);
+  let zones = zonesGenerator.FindZone(value);
 
   return (
     <>
@@ -283,6 +332,7 @@ const AutoCompleteInput: React.FC<{
                 {zones.length > 0 &&
                   zones.map((zone) => (
                     <button
+                      key={zone}
                       className="float-left w-full bg-amber-600 hover:bg-amber-700"
                       onMouseDown={() => onClick(zone)}
                     >
@@ -302,27 +352,3 @@ const AutoCompleteInput: React.FC<{
     </>
   );
 };
-
-// const AuthShowcase: React.FC = () => {
-//   const { data: sessionData } = useSession();
-
-//   const { data: secretMessage } = api.example.getSecretMessage.useQuery(
-//     undefined, // no input
-//     { enabled: sessionData?.user !== undefined },
-//   );
-
-//   return (
-//     <div className="flex flex-col items-center justify-center gap-4">
-//       <p className="text-center text-2xl text-white">
-//         {sessionData && <span>Logged in as {sessionData.user?.name}</span>}
-//         {secretMessage && <span> - {secretMessage}</span>}
-//       </p>
-//       <button
-//         className="rounded-full bg-white/10 px-10 py-3 font-semibold text-white no-underline transition hover:bg-white/20"
-//         onClick={sessionData ? () => void signOut() : () => void signIn()}
-//       >
-//         {sessionData ? "Sign out" : "Sign in"}
-//       </button>
-//     </div>
-//   );
-// };

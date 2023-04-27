@@ -1,11 +1,13 @@
+import { api } from "./api";
 import { shuffle } from "./utils";
 import type { ZoneInfo } from "./zones/zones";
-import ZonesGenerator from "./zones/zones";
+import zonesGenerator from "./zones/zones";
 
 export class World {
   selectedBall: Ball | null;
   balls: Ball[];
   connections: Connection[];
+  toBeRemoved: Connection[];
 
   isLoaded: boolean;
   screenSize: { x: number; y: number };
@@ -19,6 +21,7 @@ export class World {
     this.selectedBall = null;
     this.balls = [];
     this.connections = [];
+    this.toBeRemoved = [];
     this.isLoaded = false;
     this.screenSize = { x: 0, y: 0 };
     this.distance = 200;
@@ -28,24 +31,35 @@ export class World {
     for (let i = 0; i < 360; i++) {
       this.angles[i] = i;
     }
-
-    this.Load();
   }
 
-  async Load() {
-    if (this.isLoaded == true) {
-      return;
-    }
+  //   async Load() {
+  //     if (this.isLoaded == true) {
+  //       return;
+  //     }
 
-    await ZonesGenerator.SetupZones();
+  //     await ZonesGenerator.SetupZones();
 
-    // let connections = await database.loadConnections();
-    // for (let i = 0; i < connections.length; i++) {
-    //   this.AddConnectionFromInfo(connections[i], false);
-    // }
+  //     const connections = api.connections.getAll.useQuery().data;
 
-    this.isLoaded = true;
-  }
+  //     if (!connections) {
+  //       return;
+  //     }
+
+  //     for (let connection of connections) {
+  //       const info: ConnectionInfo = {
+  //         id: connection.id,
+  //         start: connection.from,
+  //         end: connection.to,
+  //         type: connection.type as ConnectionType,
+  //         endTime: connection.endAt.getTime(),
+  //       };
+
+  //       this.AddConnectionFromInfo(info, false);
+  //     }
+
+  //     this.isLoaded = true;
+  //   }
 
   public Reload(connections: ConnectionInfo[]) {
     this.connections = [];
@@ -318,7 +332,7 @@ export class World {
     connectionType: ConnectionType,
     endTime: number,
     save: boolean = true
-  ) {
+  ): Connection {
     let exstantConnection = this.ConnectionExists(startZone, endZone);
     if (exstantConnection) {
       this.RemoveConnection(exstantConnection);
@@ -336,14 +350,12 @@ export class World {
     };
 
     this.connections.push(connection);
-    // if (save) {
-    //   database.saveConnection(connection);
-    // }
+    return connection;
   }
 
   AddConnectionFromInfo(info: ConnectionInfo, save: boolean = true) {
-    let startZone = ZonesGenerator.GetZone(info.start);
-    let endZone = ZonesGenerator.GetZone(info.end);
+    let startZone = zonesGenerator.GetZone(info.start);
+    let endZone = zonesGenerator.GetZone(info.end);
 
     if (
       startZone == null ||
@@ -365,9 +377,18 @@ export class World {
     };
 
     this.connections.push(connection);
-    // if (save) {
-    //   database.saveConnection(connection);
-    // }
+    if (!save) {
+      return;
+    }
+
+    const { mutate } = api.connections.create.useMutation();
+
+    mutate({
+      from: info.start,
+      to: info.end,
+      type: info.type,
+      endAt: new Date(info.endTime),
+    });
   }
 
   GetConnections(ball: Ball): Connection[] {
@@ -428,7 +449,7 @@ export class World {
     const date = new Date();
     this.connections.forEach((connection) => {
       if (connection.endTime < date.getTime()) {
-        this.RemoveConnection(connection);
+        this.toBeRemoved.push(connection);
       }
     });
   }
